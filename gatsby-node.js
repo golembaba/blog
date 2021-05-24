@@ -4,15 +4,21 @@ const { createFilePath } = require(`gatsby-source-filesystem`)
 exports.createPages = async ({ graphql, actions, reporter }) => {
   const { createPage } = actions
 
+  createPage({
+    path: `/blog/`,
+    component: path.resolve(`./src/pages/blog.js`),
+  })
+
   // Define a template for blog post
   const blogPost = path.resolve(`./src/templates/blog-post.js`)
 
   // Get all markdown blog posts sorted by date
-  const result = await graphql(
+  const blogResult = await graphql(
     `
       {
         allMarkdownRemark(
           sort: { fields: [frontmatter___date], order: ASC }
+          filter: { frontmatter: { contentType: { eq: "blog" } } }
           limit: 1000
         ) {
           nodes {
@@ -20,21 +26,24 @@ exports.createPages = async ({ graphql, actions, reporter }) => {
             fields {
               slug
             }
+            frontmatter {
+              contentType
+            }
           }
         }
       }
     `
   )
 
-  if (result.errors) {
+  if (blogResult.errors) {
     reporter.panicOnBuild(
       `There was an error loading your blog posts`,
-      result.errors
+      blogResult.errors
     )
     return
   }
 
-  const posts = result.data.allMarkdownRemark.nodes
+  const posts = blogResult.data.allMarkdownRemark.nodes
 
   // Create blog posts pages
   // But only if there's at least one markdown file found at "content/blog" (defined in gatsby-config.js)
@@ -46,12 +55,58 @@ exports.createPages = async ({ graphql, actions, reporter }) => {
       const nextPostId = index === posts.length - 1 ? null : posts[index + 1].id
 
       createPage({
-        path: post.fields.slug,
+        path: `/blog${post.fields.slug}`,
         component: blogPost,
         context: {
           id: post.id,
           previousPostId,
           nextPostId,
+        },
+      })
+    })
+  }
+
+  const pageTemplate = path.resolve(`./src/templates/page.js`)
+
+  const pageResult = await graphql(
+    `
+      {
+        allMarkdownRemark(
+          sort: { fields: [frontmatter___date], order: ASC }
+          filter: { frontmatter: { contentType: { eq: "page" } } }
+          limit: 1000
+        ) {
+          nodes {
+            id
+            fields {
+              slug
+            }
+            frontmatter {
+              contentType
+            }
+          }
+        }
+      }
+    `
+  )
+
+  if (pageResult.errors) {
+    reporter.panicOnBuild(
+      `There was an error loading your blog posts`,
+      pageResult.errors
+    )
+    return
+  }
+
+  const pages = pageResult.data.allMarkdownRemark.nodes
+
+  if (pages.length > 0) {
+    pages.forEach(page => {
+      createPage({
+        path: page.fields.slug,
+        component: pageTemplate,
+        context: {
+          id: page.id,
         },
       })
     })
@@ -106,6 +161,7 @@ exports.createSchemaCustomization = ({ actions }) => {
       title: String
       description: String
       date: Date @dateformat
+      contentType: String
     }
 
     type Fields {
